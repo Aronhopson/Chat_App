@@ -1,7 +1,8 @@
 const mongoose =require("mongoose");
 const validator =require("validator");
-
-const User = mongoose.model("User", {
+const bycrypt = require("bcryptjs")
+//creating middle ware
+const userSchema = new mongoose.Schema({
     name: {
         type: String,
         required: true,
@@ -21,6 +22,7 @@ const User = mongoose.model("User", {
     },
     email:{
           type: String,
+          unique: true, //avoid login with same email
           required :true,
           trim: true,
           lowercase: true,
@@ -40,5 +42,28 @@ const User = mongoose.model("User", {
          }
     }
 })
+userSchema.statics.findbyCredentials = async( email, password) =>{
+    const user = await User.findOne({email})
+    if(!user) {
+        throw new Error("Unable to login")
+    }
+    const isMatch = await bycrypt.compare(password, user.password)
+    if(!isMatch){
+        throw new Error("unable to login")
+    }
+    return user
+}
+
+//Hash the plain text before saving
+userSchema.pre("save", async function (next) { 
+         const user = this
+         
+         if(user.isModified("password")){
+             user.password = await bycrypt.hash(user.password, 8)
+         }
+         next()
+})
+
+const User = mongoose.model("User", userSchema )
 
 module.exports = User;

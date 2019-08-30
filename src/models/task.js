@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
+const bycrypt = require("bcryptjs")
 
-//DATA  Definig a Model
-
-const Task = mongoose.model("Task", {
+//Createing middle ware
+const taskSchema = new mongoose.Schema({
     description: {
         type: String,
         trim: true,
@@ -13,5 +13,17 @@ const Task = mongoose.model("Task", {
          default: false,
     }
 })
+//DATA  Definig a Model
+taskSchema.pre("save", async function (next) { 
+    const task = this
+    
+    if(task.isModified("password")){
+        task.password = await bycrypt.hash(task.password, 8)
+    }
+    next()
+})
+
+
+const Task = mongoose.model("Task", taskSchema )
 
 module.exports = Task;
