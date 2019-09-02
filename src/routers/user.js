@@ -1,11 +1,12 @@
 const express = require("express")
 const User = require("../models/user");
+const  auth = require("../middleware/auth"); 
 const router = new express.Router()//creatin new router
 
-//USER CREATE API
+//USER CREATE API  (signing up)
 router.post("/users", async(req,res) => { 
     const user = new User(req.body)
-    try{
+    try{ 
        await user.save()
        const token = await user.generateTokenAuth()
        res.status(201).send({user, token })
@@ -15,45 +16,55 @@ router.post("/users", async(req,res) => {
     }
  });
 
+ //login
  router.post("/users/login", async (req, res) =>{
      try{
          const user = await User.findbyCredentials(req.body.email, req.body.password)
          const token  = await user.generateTokenAuth()
-         res.send({user,token})
+         res.send({user ,token})
 
      }catch(e){
             res.status(404).send()
-     }  
+     }   
  })
-  
- //USER READ API (fetching multiple)
- router.get("/users", async(req, res ) =>{
- 
+
+ //LOUGOUT INDIVIDUAL
+ router.post("/users/logout", auth, async(req, res) =>{
      try{
-         const user = await User.find({})
-         res.send(user)
- 
-     }catch(e){
-         res.status(500).send(e)
+         req.user.tokens = req.user.tokens.filter((token) =>{
+             return token.token !== req.token
+         })
+         await req.user.save()
+
+         res.send()
+     }catch (e){
+         res.status(500).send()
      }
  })
- //USER READ API (fetching by id)
- router.get("/users/:id", async(req, res)=>{
-    const _id = req.params.id
+
+ //LOGOUTALL
+ router.post("/users/logoutAll", auth, async(req, res) =>{
      
     try{
-         const user = await User.findById(_id)
- 
-             if(!user){
-               return res.status(404).send()
-           }
-         res.send(user)
-     } catch(e){
-      res.status(500).send(e)
- }
+        req.user.tokens = []
+        await req.user.save()
+        res.send()
+    }catch(e){
+        res.status(500).send()
+    }
  })
- //USER UPDATE Patch
- router.patch("/users/:id" , async(req, res) =>{
+  
+ //USER READ API (fetching multiple) 
+ //setup middleware funtion to run this specific route to lock down with authentication.
+ //pass in middleware(auth) as second argument and route handler as third
+ router.get("/users/me", auth,  async(req, res ) =>{ 
+ 
+     res.send(req.user)
+ })
+
+
+ //USER UPDATE Profile
+ router.patch("/users/me" ,auth,  async(req, res) =>{
  const updates = Object.keys(req.body)
  const allowupdates = ["name", "age", "email", "password"]
  const invalidOperation = updates.every((update) => allowupdates.includes(update))
@@ -62,29 +73,23 @@ router.post("/users", async(req,res) => {
  }
  
      try{
-         const user = await User.findById(req.params.id)
-         updates.forEach((update) =>  user[update] =req.body[update])
 
-         await user.save()
-    
-         if(!user){
-             res.status(404).send()
-         }
-         res.send(user)
+         updates.forEach((update) =>  req.user[update] =req.body[update])
+
+         await req.user.save()  
+         res.send(req.user)
  
      }catch(e){
           res.status(400).send(e)
      }
  })
  
- //DELETE HTTP user
- router.delete("/users/:id", async(req, res) =>{
+ //USER ABLE TO DELETe OWN PROFILE
+  router.delete("/users/me",auth,  async(req, res) =>{
      try{
-          const user = await User.findOneAndDelete(req.params.id)
-          if(!user){
-              res.status(404).send()
-          }
-          res.send(user)
+         await req.user.remove()
+          res.send(req.user)
+
      }catch(e){
            res.status(500).send(e)
      }
